@@ -1,0 +1,37 @@
+name: 发布公告
+description: 由 Wemsur 发布或编辑 Celestial Launcher 公告
+labels: [announcement]
+body:
+  - type: dropdown
+    id: level
+    attributes:
+      label: 公告等级
+      description: 只影响提示样式，不执行操作。
+      options: [info, warning, critical]
+      default: 0
+    validations:
+      required: true
+  - type: input
+    id: starts
+    attributes:
+      label: 生效时间
+      description: 可留空，表示首次发布即生效。填写时使用带明确时区的 RFC3339。
+      placeholder: "2026-12-01T18:00:00+08:00"
+    validations:
+      required: false
+  - type: input
+    id: expires
+    attributes:
+      label: 到期时间
+      description: 必须晚于生效时间。过期后仍保留在历史中。
+      placeholder: "2026-12-08T23:59:59+08:00"
+    validations:
+      required: true
+  - type: textarea
+    id: markdown
+    attributes:
+      label: 公告正文
+      description: 支持 Markdown。不要发布凭据或私密数据；原始 HTML、脚本及嵌入网页不会执行。
+      placeholder: "## 公告内容\n\n在这里填写正文和链接。"
+    validations:
+      required: true

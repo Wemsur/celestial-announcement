@@ -1,0 +1,44 @@
+name: 发布 Celestial 公告
+
+on:
+  issues:
+    types: [opened, edited, closed, reopened, deleted, labeled, unlabeled, transferred]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      WEMGIT_USERNAME:
+        required: true
+      WEMGIT_TOKEN:
+        required: true
+
+permissions:
+  contents: write
+  issues: read
+
+concurrency:
+  group: celestial-announcement-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'Wemsur/celestial-announcement' &&
+      (github.event_name != 'issues' ||
+      (github.actor == 'Wemsur' && github.event.issue.user.login == 'Wemsur'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 获取发布器源码
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: 设置 Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22"
+      - name: 生成并同步公告
+        run: node scripts/publish-announcements.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          WEMGIT_USERNAME: ${{ secrets.WEMGIT_USERNAME }}
+          WEMGIT_TOKEN: ${{ secrets.WEMGIT_TOKEN }}
