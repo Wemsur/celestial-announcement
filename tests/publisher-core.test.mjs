@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { parseSyncFlag } from '../scripts/publish-announcements.mjs'
 import {
 	applyIssue, auditIssue, buildIndex, parseForm, timestamp, validateDescriptor, validateState, withdraw,
 } from '../scripts/publisher-core.mjs'
@@ -10,6 +11,13 @@ const issue = (overrides = {}) => ({ id: 123, number: 1, title: '离线测试', 
 	updated_at: at, user: { login: 'Wemsur' }, labels: [{ name: 'announcement' }], ...overrides })
 const allowed = { body: true, title: true, state: true }
 const empty = () => ({ schema_version: 1, records: [] })
+
+test('取消同步不被当成缺省值，缺省仍同步', () => {
+	assert.equal(parseSyncFlag(), true)
+	assert.equal(parseSyncFlag('true'), true)
+	assert.equal(parseSyncFlag('false'), false)
+	assert.throws(() => parseSyncFlag(''))
+})
 
 test('严格日期与明确时区', () => {
 	assert.equal(timestamp('2026-01-01T08:00:00+08:00'), at)

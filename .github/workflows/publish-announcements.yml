@@ -4,12 +4,23 @@ on:
   issues:
     types: [opened, edited, closed, reopened, deleted, labeled, unlabeled, transferred]
   workflow_dispatch:
+    inputs:
+      sync_wemgit:
+        description: 同步到 wemgit（维护期间可取消）
+        type: boolean
+        default: true
+        required: false
   workflow_call:
+    inputs:
+      sync_wemgit:
+        type: boolean
+        default: true
+        required: false
     secrets:
       WEMGIT_USERNAME:
-        required: true
+        required: false
       WEMGIT_TOKEN:
-        required: true
+        required: false
 
 permissions:
   contents: write
@@ -36,9 +47,10 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "22"
-      - name: 生成并同步公告
+      - name: 生成公告并按选择同步
         run: node scripts/publish-announcements.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          WEMGIT_USERNAME: ${{ secrets.WEMGIT_USERNAME }}
-          WEMGIT_TOKEN: ${{ secrets.WEMGIT_TOKEN }}
+          SYNC_WEMGIT: ${{ toJSON(inputs.sync_wemgit) != 'false' }}
+          WEMGIT_USERNAME: ${{ toJSON(inputs.sync_wemgit) != 'false' && secrets.WEMGIT_USERNAME || '' }}
+          WEMGIT_TOKEN: ${{ toJSON(inputs.sync_wemgit) != 'false' && secrets.WEMGIT_TOKEN || '' }}

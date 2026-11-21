@@ -15,6 +15,11 @@ const API = `https://api.github.com/repos/${REPOSITORY}`
 const DATA_README = '# Celestial 公告\n\n此分支由 GitHub Actions 自动生成，请勿直接编辑。\n\n在 https://github.com/Wemsur/celestial-announcement/issues 发布公告。\n\n索引：index.json；正文：announcements/。过期/结束正文保留，撤回正文不再提供。\n'
 const enc = new TextDecoder('utf-8', { fatal: true })
 
+export function parseSyncFlag(value = 'true') {
+	if (!['true', 'false'].includes(value)) throw new Error('SYNC_WEMGIT 必须为 true 或 false')
+	return value === 'true'
+}
+
 async function exists(file) {
 	try { return await lstat(file) }
 	catch (error) { if (error.code === 'ENOENT') return null; throw error }
@@ -209,7 +214,9 @@ async function main() {
 	const token = process.env.GITHUB_TOKEN
 	const wemToken = process.env.WEMGIT_TOKEN
 	const wemUser = process.env.WEMGIT_USERNAME
-	if (!token || !wemToken || !wemUser) throw new Error('请先配置 WEMGIT_USERNAME、WEMGIT_TOKEN 及 Actions 写权限；没有发布任何公告。')
+	const syncWemgit = parseSyncFlag(process.env.SYNC_WEMGIT)
+	if (!token) throw new Error('需要 GitHub Actions 提供 GITHUB_TOKEN 及发布分支写权限。')
+	if (syncWemgit && (!wemToken || !wemUser)) throw new Error('同步到 wemgit 需要 WEMGIT_USERNAME 和 WEMGIT_TOKEN；维护期间请取消同步选项。')
 	const temporary = await mkdtemp(path.join(tmpdir(), 'celestial-announcements-'))
 	try {
 		const askpass = path.join(temporary, 'askpass.sh')
@@ -265,10 +272,15 @@ async function main() {
 			git(['commit', '-m', 'docs: publish announcement snapshot'], root, askpass, 'x-access-token', token)
 			git(['push', 'origin', 'HEAD:refs/heads/published'], root, askpass, 'x-access-token', token)
 		}
-		git(['remote', 'add', 'wemgit', WEMGIT], root, askpass, wemUser, wemToken)
-		git(['push', 'wemgit', 'HEAD:refs/heads/main'], root, askpass, wemUser, wemToken)
-		console.log(`已同步 generation ${index.generation}，${index.announcements.length} 条公告/历史记录。`)
-		if (errors.length) throw new Error(`其他合法变更已同步，以下修订未发布，旧版本保留：\n${errors.join('\n')}`)
+		console.log(`GitHub published 已发布 generation ${index.generation}，${index.announcements.length} 条公告/历史记录。`)
+		if (syncWemgit) {
+			git(['remote', 'add', 'wemgit', WEMGIT], root, askpass, wemUser, wemToken)
+			git(['push', 'wemgit', 'HEAD:refs/heads/main'], root, askpass, wemUser, wemToken)
+			console.log('wemgit 同步完成。')
+		} else {
+			console.log('本次运行已跳过 wemgit，不连接分发服务器。恢复后勾选同步并重跑即可补同步。')
+		}
+		if (errors.length) throw new Error(`其他合法变更已发布，以下修订未发布，旧版本保留：\n${errors.join('\n')}`)
 	} finally { await rm(temporary, { recursive: true, force: true }) }
 }
 

@@ -14,7 +14,7 @@
 
 ## 首次上线
 
-1. 在 GitHub 公告源仓库配置 Actions Secrets：
+1. 准备同步到 wemgit 时，在 GitHub 公告源仓库配置 Actions Secrets；如果手动取消同步、仅发布 GitHub，可以暂不配置以下 wemgit 凭据：
    - `WEMGIT_USERNAME`：实际拥有 wemgit 公告仓库写权限的账号，不一定等于仓库命名空间 `celestial`。
    - `WEMGIT_TOKEN`：该账号的最小写入凭据。若服务不支持限定单仓，使用只对本公告仓库有写权限的专用账号。
    - 不需要另建 GitHub PAT，工作流使用自动提供的 `GITHUB_TOKEN`。
@@ -31,12 +31,21 @@ git push --atomic -u origin main published
 gh label create announcement --repo Wemsur/celestial-announcement --color 7371FC --description "Celestial Launcher 公告"
 ```
 
-5. 手动运行“发布 Celestial 公告”，把空索引同步到 wemgit。没有有效公告时启动器不会显示公告按钮；此步骤不发布演示内容。
+5. 手动运行“发布 Celestial 公告”，默认勾选“同步到 wemgit”，把空索引同步到 wemgit。维护期间可取消勾选，只发布 GitHub；此步骤不会发布演示内容。
 6. 确认以下地址匿名返回 JSON，而不是登录页面、仓库网页或错误页：
 
 `https://download.celestial.byside.top/celestial/celestial-announcement/raw/branch/main/index.json`
 
 以后正常维护只推送源码 `main`；发布分支交给机器人更新。若 Actions 抢先创建了远端 published，先获取并使用其历史，不要强推本地旧分支。
+
+## 手动运行时选择是否同步
+
+“发布 Celestial 公告”和“核对 Celestial 公告”的 Run workflow 弹窗都有“同步到 wemgit”勾选框，默认勾选。
+
+- 勾选：发布到 GitHub published 后，继续同步到 wemgit main，需要 wemgit 两个 Secrets。
+- 取消：只发布 GitHub，不连接 wemgit，也不要求/注入 wemgit 凭据；日志会明确说已跳过同步。维护完成后勾选并重跑即可补同步同一历史，不必重新发 Issue。
+- 选择只影响本次手动运行。Issue 自动触发和定时核对仍默认同步，不会记住上一次取消选择。维护期间可在提 Issue 后手动取消同步来发布；自动运行仍可能因 wemgit 不可用而失败。
+- 若未来需要自动触发也长期暂停同步，应再加仓库级控制，不通过删除 Token 或关闭 TLS/重定向检查来实现。
 
 ## 创建和编辑公告
 
@@ -82,6 +91,15 @@ ID 是 `github-<GitHub Issue 数据库 ID>`，不是页面上的 Issue 编号。
 正文按内容寻址，不在原路径覆盖。索引与正文同一次 Git 提交；摘要检测混用/损坏，不等同于独立发布者签名。旧修订文件保留直到该 ID 撤回；应用历史展示每个 ID 的最新已验证版本。
 
 限额：正文 128 KiB，索引 1 MiB/2000 条。超过限制会报错，不能靠静默截断或删除历史继续发布。
+
+## 启动器读取与回退
+
+- 主来源是 wemgit main；备用来源是 `https://raw.githubusercontent.com/Wemsur/celestial-announcement/published/`，不是 GitHub 源码 main。
+- 先尝试主源；网络/HTTP/数据校验失败，或索引代际低于本机已接受快照时尝试备用。主源成功时不同时查询两边比较版本，合法空索引也不触发回退。
+- 正文优先从成功接受索引的来源获取，失败再试另一来源；两边都必须匹配索引的 SHA256，不能拿旧正文冒充新正文。
+- 每个来源有独立超时，刷新总预算约30秒，避免主源长时间等待耗尽备用机会；仍不阻塞启动。
+- 两边都失败时不自动弹新公告，已验证缓存继续可手动查看。
+- 回退不能代替修复发布同步：如果 wemgit 返回合法但尚未同步的新旧差异，本机还不知道更高代际时不会主动比对 GitHub。发布器 Git push 的301需要根据 Location确认正确地址或受控跳转，不应关闭TLS校验或随意放开所有重定向。
 
 ## 失败与恢复
 
