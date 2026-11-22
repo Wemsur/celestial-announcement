@@ -5,8 +5,8 @@ on:
     - cron: "7,22,37,52 * * * *"
   workflow_dispatch:
     inputs:
-      sync_wemgit:
-        description: 同步到 wemgit（维护期间可取消）
+      sync_gitcode:
+        description: 同步到 GitCode（维护期间可取消）
         type: boolean
         default: true
         required: false
@@ -19,5 +19,5 @@ jobs:
   reconcile:
     uses: ./.github/workflows/publish-announcements.yml
     with:
-      sync_wemgit: ${{ toJSON(inputs.sync_wemgit) != 'false' }}
+      sync_gitcode: ${{ toJSON(inputs.sync_gitcode) != 'false' }}
     secrets: inherit

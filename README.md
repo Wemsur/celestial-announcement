@@ -1,50 +1,54 @@
 # Celestial 公告源码与发布器
 
-这里是 **GitHub 编辑源**，不是启动器直接读取的分发分支。通过 GitHub Issue 发布 Markdown 公告，GitHub Actions 自动生成索引和正文，再同步到 wemgit。
+这里是 **GitHub 编辑源**，不是启动器直接读取的分发分支。通过 GitHub Issue 发布 Markdown 公告，GitHub Actions 自动生成索引和正文，再同步到 GitCode。启动器优先读取 GitCode，失败时回退到 GitHub published。
 
 | 位置 | 职责 |
 | --- | --- |
 | GitHub `Wemsur/celestial-announcement` 的 `main` | Issue 表单、发布器、工作流、说明与测试源码 |
-| GitHub 的 `published` | 自动生成的索引、正文、接受修订状态 |
-| wemgit `celestial/celestial-announcement` 的 `main` | 与 GitHub published 同一发布历史，供启动器匿名读取 |
+| GitHub 的 `published` | 自动生成的索引、正文、接受修订状态，也是启动器备用来源 |
+| GitCode `Wemsur/celestial-announcement` 的 `main` | 与 GitHub published 同一发布历史，供启动器优先匿名读取 |
 | 本地 `origin` | GitHub 源仓库 |
-| 本地 `wemgit` | wemgit 分发仓库 |
+| 本地 `gitcode` | GitCode 分发仓库，地址为 `https://gitcode.com/Wemsur/celestial-announcement.git` |
 
-**不要手工编辑生成分支，不要强推，也不要在 wemgit 单独制造一套历史。** 本次代码交付不等于已经上线；真实凭据、初次推送及线上验收由维护者完成。
+**不要手工编辑生成分支，不要强推，也不要在 GitCode 单独制造一套历史。** 本次代码交付不等于已经上线；真实凭据、初次推送及线上验收由维护者完成。
 
-## 首次上线
+## 首次上线或迁移分发仓库
 
-1. 准备同步到 wemgit 时，在 GitHub 公告源仓库配置 Actions Secrets；如果手动取消同步、仅发布 GitHub，可以暂不配置以下 wemgit 凭据：
-   - `WEMGIT_USERNAME`：实际拥有 wemgit 公告仓库写权限的账号，不一定等于仓库命名空间 `celestial`。
-   - `WEMGIT_TOKEN`：该账号的最小写入凭据。若服务不支持限定单仓，使用只对本公告仓库有写权限的专用账号。
-   - 不需要另建 GitHub PAT，工作流使用自动提供的 `GITHUB_TOKEN`。
-2. 允许仓库执行 GitHub 托管 Actions，并确保工作流可以写入 `published` 分支。不要绕过分支保护；若保护规则阻止机器人写入，应明确配置必要权限。
-3. 本地会准备源码 `main` 与空的 `published` 初始分支。进入本公告源码仓库后一起上传，避免初始化发生两套不同历史：
+1. 准备同步到 GitCode 时，在 **GitHub 公告源仓库 `Wemsur/celestial-announcement`** 的 Settings → Secrets and variables → Actions 中配置 Repository secrets。Secrets 按 GitHub 仓库分别配置，不会从启动器仓库自动共享；如果手动取消同步、仅发布 GitHub，可以暂不配置以下凭据：
+   - `GITCODE_USERNAME`：实际拥有 GitCode 公告仓库写权限的账号。
+   - `GITCODE_TOKEN`：该账号的最小仓库写入凭据。若平台不能限定单仓，使用只对本公告仓库有写权限的专用账号。
+   - 不需要另建 GitHub PAT，工作流使用自动提供的 `GITHUB_TOKEN`；本次迁移也不需要新增签名密钥。
+2. 允许仓库执行 GitHub 托管 Actions，并确保工作流可以写入现有 `published` 分支。不要绕过分支保护；若保护规则阻止机器人写入，应明确配置必要权限。
+3. 保留 GitHub 现有 `published` 的提交历史、generation 和状态文件，**不要新建或重置 `published`，也不要运行空产物初始化来迁移**。在 GitCode 准备公开的空仓库 `Wemsur/celestial-announcement`，不要让平台生成独立的 README/初始提交。首次同步应把 GitHub 的 `published` 原样快进推送到 GitCode 的 `main`。以下命令供维护者核对后主动执行；本次代码修改不会执行这些命令或修改本地 remote：
 
 ```bash
-git push --atomic -u origin main published
+git fetch origin published
+git remote add gitcode https://gitcode.com/Wemsur/celestial-announcement.git
+git push gitcode refs/remotes/origin/published:refs/heads/main
 ```
 
-4. 在 GitHub 创建表单使用的 `announcement` 标签。以下命令会修改线上仓库，需由维护者主动执行：
+若本地已有 `gitcode` remote，先核对其地址；若 GitCode main 已存在，应先确认其与 GitHub published 属于同一历史，不能用强推覆盖独立提交。
+
+4. 确认 GitHub 已有表单使用的 `announcement` 标签。仅缺少标签时，由维护者主动执行：
 
 ```bash
 gh label create announcement --repo Wemsur/celestial-announcement --color 7371FC --description "Celestial Launcher 公告"
 ```
 
-5. 手动运行“发布 Celestial 公告”，默认勾选“同步到 wemgit”，把空索引同步到 wemgit。维护期间可取消勾选，只发布 GitHub；此步骤不会发布演示内容。
-6. 确认以下地址匿名返回 JSON，而不是登录页面、仓库网页或错误页：
+5. 将发布器和工作流源码更新到 GitHub `main` 后，手动运行“发布 Celestial 公告”，默认勾选“同步到 GitCode”，验证同一发布历史可继续同步。维护期间可取消勾选，只发布 GitHub。
+6. 确认以下地址匿名返回 JSON，而不是登录页面、仓库网页或错误页，并确认索引中引用的正文也能匿名读取：
 
-`https://download.celestial.byside.top/celestial/celestial-announcement/raw/branch/main/index.json`
+`https://api.gitcode.com/api/v5/repos/Wemsur/celestial-announcement/raw/index.json?ref=main`
 
-以后正常维护只推送源码 `main`；发布分支交给机器人更新。若 Actions 抢先创建了远端 published，先获取并使用其历史，不要强推本地旧分支。
+GitHub 备用地址仍为 `https://raw.githubusercontent.com/Wemsur/celestial-announcement/published/index.json`。以后正常维护只推送源码 `main`；发布分支交给机器人更新。GitCode main 始终沿用 GitHub published 的历史，不单独编辑。
 
 ## 手动运行时选择是否同步
 
-“发布 Celestial 公告”和“核对 Celestial 公告”的 Run workflow 弹窗都有“同步到 wemgit”勾选框，默认勾选。
+“发布 Celestial 公告”和“核对 Celestial 公告”的 Run workflow 弹窗都有“同步到 GitCode”勾选框，默认勾选。
 
-- 勾选：发布到 GitHub published 后，继续同步到 wemgit main，需要 wemgit 两个 Secrets。
-- 取消：只发布 GitHub，不连接 wemgit，也不要求/注入 wemgit 凭据；日志会明确说已跳过同步。维护完成后勾选并重跑即可补同步同一历史，不必重新发 Issue。
-- 选择只影响本次手动运行。Issue 自动触发和定时核对仍默认同步，不会记住上一次取消选择。维护期间可在提 Issue 后手动取消同步来发布；自动运行仍可能因 wemgit 不可用而失败。
+- 勾选：发布到 GitHub published 后，继续同步到 GitCode main，需要 GitCode 两个 Secrets。
+- 取消：只发布 GitHub，不连接 GitCode，也不要求/注入 GitCode 凭据；日志会明确说已跳过同步。维护完成后勾选并重跑即可补同步同一历史，不必重新发 Issue。
+- 选择只影响本次手动运行。Issue 自动触发和定时核对仍默认同步，不会记住上一次取消选择。维护期间可在提 Issue 后手动取消同步来发布；自动运行仍可能因 GitCode 不可用而失败。
 - 若未来需要自动触发也长期暂停同步，应再加仓库级控制，不通过删除 Token 或关闭 TLS/重定向检查来实现。
 
 ## 创建和编辑公告
@@ -77,7 +81,7 @@ gh label create announcement --repo Wemsur/celestial-announcement --color 7371FC
 - 支持普通 HTTPS 图片，遵循启动器已有过滤和图片代理策略。
 - GitHub Issue 拖入图片生成的绝对附件链接可以直接使用，不自动转存全部附件。
 - 自有相对图片放在源码 `main` 的 `assets/` 目录。相对图片解析到 GitHub Raw main；相对文档解析到 GitHub 仓库 main 文件页面，不解析到启动器本地路径。
-- 原始 HTML、脚本、iframe 与内部/file/javascript/data协议不执行。外链通过系统浏览器打开，不导航启动器主页面。
+- GitHub 编辑器生成的 `<img … />` 会按受限图片数据识别，转换为普通图片 token；只保留校验后的 src、alt、title 与有界数值尺寸，丢弃事件、style、srcset 等属性。其他原始 HTML、脚本、iframe 与内部/file/javascript/data协议不执行，代码块中的标签仍显示为代码。外链通过系统浏览器打开，不导航启动器主页面。
 - 正文下载限额与浏览器图片加载不是同一边界，不声称所有图片都经过后端字节限额下载。
 
 ## 生成格式
@@ -94,19 +98,19 @@ ID 是 `github-<GitHub Issue 数据库 ID>`，不是页面上的 Issue 编号。
 
 ## 启动器读取与回退
 
-- 主来源是 wemgit main；备用来源是 `https://raw.githubusercontent.com/Wemsur/celestial-announcement/published/`，不是 GitHub 源码 main。
+- 主来源是 GitCode main；备用来源是 `https://raw.githubusercontent.com/Wemsur/celestial-announcement/published/`，不是 GitHub 源码 main。
 - 先尝试主源；网络/HTTP/数据校验失败，或索引代际低于本机已接受快照时尝试备用。主源成功时不同时查询两边比较版本，合法空索引也不触发回退。
 - 正文优先从成功接受索引的来源获取，失败再试另一来源；两边都必须匹配索引的 SHA256，不能拿旧正文冒充新正文。
-- wemgit 单次预算4秒，GitHub单次预算15秒；正文读取整体25秒，刷新总预算60秒，避免外层先截断备用请求。仍为后台任务，不阻塞启动。
+- GitCode 单次预算4秒，GitHub单次预算15秒；正文读取整体25秒，刷新总预算60秒，避免外层先截断备用请求。仍为后台任务，不阻塞启动。
 - 两边都失败时不自动弹新公告，已验证缓存继续可手动查看。
-- 回退不能代替修复发布同步：如果 wemgit 返回合法但尚未同步的新旧差异，本机还不知道更高代际时不会主动比对 GitHub。发布器 Git push 的301需要根据 Location确认正确地址或受控跳转，不应关闭TLS校验或随意放开所有重定向。
+- 回退不能代替修复发布同步：如果 GitCode 返回合法但尚未同步的旧索引，本机还不知道更高代际时不会主动比对 GitHub。发布器保留 `http.followRedirects=false`，并用 `credential.helper=` 清空继承的凭据助手；Git push 若返回 301，应核对并修正目标地址，不关闭 TLS 校验或放宽认证重定向。
 
 ## 失败与恢复
 
 - 格式错误不会把旧公告换成坏内容；错误会在 Actions 日志中指明 Issue 编号。其他合法变更若已同步，会明确报告，不能把红色运行理解成“什么都没发生”。
 - 只有完整且经操作者核对的 GitHub 数据才会更新；查询期间发生修订竞争时拒绝混用，重新运行即可。
-- GitHub published 成功而 wemgit 同步失败，生成产物仍保留。修复凭据/网络后重跑，会重试同一产物。
-- wemgit 有独立提交导致非快进：不要强推。先确认两端历史并由维护者妥善整合。
+- GitHub published 成功而 GitCode 同步失败，生成产物仍保留。修复凭据/网络后重跑，会重试同一产物。
+- GitCode 有独立提交导致非快进：不要强推。先确认两端历史并由维护者妥善整合。
 - 调度可能延迟，长时间无活动的公开仓库定时工作流可能被 GitHub 暂停。Issue 事件发布与兜底定时核对分开，仍应检查 Actions 状态；必要时手动恢复核对任务。
 
 ## 本地验证与空产物

@@ -5,21 +5,21 @@ on:
     types: [opened, edited, closed, reopened, deleted, labeled, unlabeled, transferred]
   workflow_dispatch:
     inputs:
-      sync_wemgit:
-        description: 同步到 wemgit（维护期间可取消）
+      sync_gitcode:
+        description: 同步到 GitCode（维护期间可取消）
         type: boolean
         default: true
         required: false
   workflow_call:
     inputs:
-      sync_wemgit:
+      sync_gitcode:
         type: boolean
         default: true
         required: false
     secrets:
-      WEMGIT_USERNAME:
+      GITCODE_USERNAME:
         required: false
-      WEMGIT_TOKEN:
+      GITCODE_TOKEN:
         required: false
 
 permissions:
@@ -51,6 +51,6 @@ jobs:
         run: node scripts/publish-announcements.mjs
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          SYNC_WEMGIT: ${{ toJSON(inputs.sync_wemgit) != 'false' }}
-          WEMGIT_USERNAME: ${{ toJSON(inputs.sync_wemgit) != 'false' && secrets.WEMGIT_USERNAME || '' }}
-          WEMGIT_TOKEN: ${{ toJSON(inputs.sync_wemgit) != 'false' && secrets.WEMGIT_TOKEN || '' }}
+          SYNC_GITCODE: ${{ toJSON(inputs.sync_gitcode) != 'false' }}
+          GITCODE_USERNAME: ${{ toJSON(inputs.sync_gitcode) != 'false' && secrets.GITCODE_USERNAME || '' }}
+          GITCODE_TOKEN: ${{ toJSON(inputs.sync_gitcode) != 'false' && secrets.GITCODE_TOKEN || '' }}

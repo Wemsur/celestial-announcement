@@ -12,11 +12,11 @@ const issue = (overrides = {}) => ({ id: 123, number: 1, title: '离线测试', 
 const allowed = { body: true, title: true, state: true }
 const empty = () => ({ schema_version: 1, records: [] })
 
-test('取消同步不被当成缺省值，缺省仍同步', () => {
+test('取消 GitCode 同步不被当成缺省值，缺省仍同步', () => {
 	assert.equal(parseSyncFlag(), true)
 	assert.equal(parseSyncFlag('true'), true)
 	assert.equal(parseSyncFlag('false'), false)
-	assert.throws(() => parseSyncFlag(''))
+	assert.throws(() => parseSyncFlag(''), /SYNC_GITCODE 必须为 true 或 false/)
 })
 
 test('严格日期与明确时区', () => {

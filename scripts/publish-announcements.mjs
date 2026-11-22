@@ -10,13 +10,13 @@ import {
 } from './publisher-core.mjs'
 
 const GITHUB = `https://github.com/${REPOSITORY}.git`
-const WEMGIT = 'https://download.celestial.byside.top/celestial/celestial-announcement.git'
+const GITCODE = 'https://gitcode.com/Wemsur/celestial-announcement.git'
 const API = `https://api.github.com/repos/${REPOSITORY}`
 const DATA_README = '# Celestial 公告\n\n此分支由 GitHub Actions 自动生成，请勿直接编辑。\n\n在 https://github.com/Wemsur/celestial-announcement/issues 发布公告。\n\n索引：index.json；正文：announcements/。过期/结束正文保留，撤回正文不再提供。\n'
 const enc = new TextDecoder('utf-8', { fatal: true })
 
 export function parseSyncFlag(value = 'true') {
-	if (!['true', 'false'].includes(value)) throw new Error('SYNC_WEMGIT 必须为 true 或 false')
+	if (!['true', 'false'].includes(value)) throw new Error('SYNC_GITCODE 必须为 true 或 false')
 	return value === 'true'
 }
 
@@ -175,15 +175,15 @@ async function auditsFor(issues, token) {
 }
 
 function redacted(text) {
-	for (const secret of [process.env.GITHUB_TOKEN, process.env.WEMGIT_TOKEN,
-		process.env.WEMGIT_TOKEN && Buffer.from(`${process.env.WEMGIT_USERNAME}:${process.env.WEMGIT_TOKEN}`).toString('base64')].filter(Boolean)) {
+	for (const secret of [process.env.GITHUB_TOKEN, process.env.GITCODE_TOKEN,
+		process.env.GITCODE_TOKEN && Buffer.from(`${process.env.GITCODE_USERNAME}:${process.env.GITCODE_TOKEN}`).toString('base64')].filter(Boolean)) {
 		text = text.split(secret).join('[redacted]')
 	}
 	return text
 }
 
 function git(args, cwd, askpass, username, token, allowed = [0]) {
-	const result = spawnSync('git', ['-c', 'http.followRedirects=false', ...args], {
+	const result = spawnSync('git', ['-c', 'http.followRedirects=false', '-c', 'credential.helper=', ...args], {
 		cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024,
 		env: { ...process.env, LC_ALL: 'C', GIT_TERMINAL_PROMPT: '0', GIT_TRACE: '0', GIT_TRACE_CURL: '0', GIT_CURL_VERBOSE: '0',
 			GIT_ASKPASS: askpass, CELESTIAL_GIT_USER: username, CELESTIAL_GIT_TOKEN: token },
@@ -212,11 +212,11 @@ async function main() {
 	}
 	if (eventName === 'workflow_dispatch' && !trusted(process.env.GITHUB_ACTOR)) throw new Error('仅 Wemsur 可以手动恢复发布')
 	const token = process.env.GITHUB_TOKEN
-	const wemToken = process.env.WEMGIT_TOKEN
-	const wemUser = process.env.WEMGIT_USERNAME
-	const syncWemgit = parseSyncFlag(process.env.SYNC_WEMGIT)
+	const gitcodeToken = process.env.GITCODE_TOKEN
+	const gitcodeUser = process.env.GITCODE_USERNAME
+	const syncGitcode = parseSyncFlag(process.env.SYNC_GITCODE)
 	if (!token) throw new Error('需要 GitHub Actions 提供 GITHUB_TOKEN 及发布分支写权限。')
-	if (syncWemgit && (!wemToken || !wemUser)) throw new Error('同步到 wemgit 需要 WEMGIT_USERNAME 和 WEMGIT_TOKEN；维护期间请取消同步选项。')
+	if (syncGitcode && (!gitcodeToken || !gitcodeUser)) throw new Error('同步到 GitCode 需要 GITCODE_USERNAME 和 GITCODE_TOKEN；维护期间请取消同步选项。')
 	const temporary = await mkdtemp(path.join(tmpdir(), 'celestial-announcements-'))
 	try {
 		const askpass = path.join(temporary, 'askpass.sh')
@@ -273,12 +273,12 @@ async function main() {
 			git(['push', 'origin', 'HEAD:refs/heads/published'], root, askpass, 'x-access-token', token)
 		}
 		console.log(`GitHub published 已发布 generation ${index.generation}，${index.announcements.length} 条公告/历史记录。`)
-		if (syncWemgit) {
-			git(['remote', 'add', 'wemgit', WEMGIT], root, askpass, wemUser, wemToken)
-			git(['push', 'wemgit', 'HEAD:refs/heads/main'], root, askpass, wemUser, wemToken)
-			console.log('wemgit 同步完成。')
+		if (syncGitcode) {
+			git(['remote', 'add', 'gitcode', GITCODE], root, askpass, gitcodeUser, gitcodeToken)
+			git(['push', 'gitcode', 'HEAD:refs/heads/main'], root, askpass, gitcodeUser, gitcodeToken)
+			console.log('GitCode main 同步完成，启动器优先读取 GitCode，失败时回退到 GitHub published。')
 		} else {
-			console.log('本次运行已跳过 wemgit，不连接分发服务器。恢复后勾选同步并重跑即可补同步。')
+			console.log('本次运行已跳过 GitCode，不连接分发服务器。恢复后勾选同步并重跑即可补同步。')
 		}
 		if (errors.length) throw new Error(`其他合法变更已发布，以下修订未发布，旧版本保留：\n${errors.join('\n')}`)
 	} finally { await rm(temporary, { recursive: true, force: true }) }
