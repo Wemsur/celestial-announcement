@@ -32,6 +32,22 @@
 				"body_sha256": "261d785d09ab119da48ecd7cb6a0ada882c6c728249da105a45f04bf0953d0cf"
 			},
 			"source_updated_at": "2026-11-27T14:28:18.000Z"
+		},
+		{
+			"descriptor": {
+				"id": "github-6648401580",
+				"issue_number": 4,
+				"title": "公告3",
+				"level": "warning",
+				"published_at": "2026-11-27T14:29:20.698Z",
+				"updated_at": "2026-11-27T14:29:10.000Z",
+				"starts_at": "2026-11-27T14:29:20.698Z",
+				"expires_at": "2026-11-28T22:00:00.000Z",
+				"state": "published",
+				"body_path": "announcements/github-6648401580/1bfd5c3131dbd38aabe4d051f70801f76aba83f36613da5177d98ff326abd250.md",
+				"body_sha256": "1bfd5c3131dbd38aabe4d051f70801f76aba83f36613da5177d98ff326abd250"
+			},
+			"source_updated_at": "2026-11-27T14:29:10.000Z"
 		}
 	]
 }
