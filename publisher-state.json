@@ -16,6 +16,22 @@
 				"body_sha256": "1ea64e4a16928fb82eae9b094031652a45130df0e2a580faf6507a96c5aa6b41"
 			},
 			"source_updated_at": "2026-11-21T01:08:43.000Z"
+		},
+		{
+			"descriptor": {
+				"id": "github-6648362498",
+				"issue_number": 3,
+				"title": "测试公告2",
+				"level": "warning",
+				"published_at": "2026-11-27T14:27:02.660Z",
+				"updated_at": "2026-11-27T14:26:51.000Z",
+				"starts_at": "2026-11-27T14:27:02.660Z",
+				"expires_at": "2026-11-28T22:00:00.000Z",
+				"state": "published",
+				"body_path": "announcements/github-6648362498/261d785d09ab119da48ecd7cb6a0ada882c6c728249da105a45f04bf0953d0cf.md",
+				"body_sha256": "261d785d09ab119da48ecd7cb6a0ada882c6c728249da105a45f04bf0953d0cf"
+			},
+			"source_updated_at": "2026-11-27T14:26:51.000Z"
 		}
 	]
 }
