@@ -24,7 +24,7 @@ on:
 
 permissions:
   contents: write
-  issues: read
+  issues: write
 
 concurrency:
   group: celestial-announcement-publisher

@@ -4,9 +4,10 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { randomUUID } from 'node:crypto'
+import { postFeedback } from './issue-feedback.mjs'
 import {
 	AUTHOR, REPOSITORY, MAX_BODY_BYTES, MAX_INDEX_BYTES, MAX_RECORDS,
-	applyIssue, auditIssue, buildIndex, sha256, trusted, validateIndex, validateState, withdraw,
+	applyIssue, auditIssue, buildIndex, issueFingerprint, sha256, trusted, validateIndex, validateState, withdraw,
 } from './publisher-core.mjs'
 
 const GITHUB = `https://github.com/${REPOSITORY}.git`
@@ -216,9 +217,39 @@ async function main() {
 	const gitcodeUser = process.env.GITCODE_USERNAME
 	const syncGitcode = parseSyncFlag(process.env.SYNC_GITCODE)
 	if (!token) throw new Error('需要 GitHub Actions 提供 GITHUB_TOKEN 及发布分支写权限。')
-	if (syncGitcode && (!gitcodeToken || !gitcodeUser)) throw new Error('同步到 GitCode 需要 GITCODE_USERNAME 和 GITCODE_TOKEN；维护期间请取消同步选项。')
+	const feedback = new Map()
+	const eventIssue = event.issue
+	if (eventIssue && event.action !== 'deleted' && !eventIssue.pull_request && trusted(eventIssue.user?.login)
+		&& eventIssue.labels?.some((label) => (typeof label === 'string' ? label : label.name) === 'announcement')) {
+		feedback.set(eventIssue.number, { issue: eventIssue })
+	}
+	let githubPublished = false
+	let gitcodeSynced = false
+	let feedbackSent = false
+	const runUrl = /^\d+$/.test(process.env.GITHUB_RUN_ID ?? '')
+		? `https://github.com/${REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}` : null
+	async function reportFeedback() {
+		let failed = false
+		for (const { issue, error, warning } of feedback.values()) {
+			const outcome = error
+				? { ok: false, title: '公告修订发布失败', message: `${error}\n本次修订未发布；如有之前成功发布的版本，仍保留旧版本。` }
+				: !githubPublished
+					? { ok: false, title: '公告发布未确认完成', message: '本次运行未确认公告发布完成，请检查 Actions 运行日志与 published 分支后重试。' }
+					: warning
+						? { ok: true, title: '已关闭的无效公告已跳过', message: warning }
+						: syncGitcode && !gitcodeSynced
+							? { ok: false, title: 'GitHub 已发布，GitCode 同步未完成', message: '公告已保存到 GitHub published，但尚未确认同步到 GitCode。请查看日志并重跑，不需要重新创建 Issue。' }
+							: { ok: true, title: issue.state === 'closed' ? '公告已结束并归档' : '公告发布成功',
+								message: `${issue.state === 'closed' ? '已关闭公告保留最后成功正文，不再有效展示。' : '当前修订已保存；启动器是否展示仍取决于有效期和本机“不再显示”记录。'}\n${syncGitcode ? 'GitHub published 与 GitCode main 已同步。' : 'GitHub published 已更新，本次按选择跳过 GitCode 同步。'}` }
+			try { await postFeedback(api, API, token, issue, { ...outcome, message: redacted(outcome.message) }, runUrl) }
+			catch (error) { failed = true; console.error(`Issue ${issue.number} 反馈评论失败：${redacted(error.message)}`) }
+		}
+		feedbackSent = true
+		return failed
+	}
 	const temporary = await mkdtemp(path.join(tmpdir(), 'celestial-announcements-'))
 	try {
+		if (syncGitcode && (!gitcodeToken || !gitcodeUser)) throw new Error('同步到 GitCode 需要 GITCODE_USERNAME 和 GITCODE_TOKEN；维护期间请取消同步选项。')
 		const askpass = path.join(temporary, 'askpass.sh')
 		await writeFile(askpass, '#!/bin/sh\ncase "$1" in\n*Username*) printf \'%s\\n\' "$CELESTIAL_GIT_USER";;\n*Password*) printf \'%s\\n\' "$CELESTIAL_GIT_TOKEN";;\n*) exit 1;;\nesac\n', { mode: 0o700 })
 		const root = path.join(temporary, 'data')
@@ -246,17 +277,46 @@ async function main() {
 		const changes = new Map()
 		const errors = []
 		const issues = await listIssues(token)
+		feedback.clear()
 		const nodes = issues.filter((issue) => {
 			const old = state.records.find((record) => record.descriptor.id === `github-${issue.id}`)
 			return `github-${issue.id}` !== deletedId && old?.descriptor.state !== 'withdrawn'
-				&& (!old || Date.parse(issue.updated_at) > Date.parse(old.source_updated_at))
+				&& (!old || (Date.parse(issue.updated_at) > Date.parse(old.source_updated_at)
+					&& old.source_fingerprint !== issueFingerprint(issue)))
 		})
+		for (const issue of issues) {
+			const old = state.records.find((record) => record.descriptor.id === `github-${issue.id}`)
+			if (old?.descriptor.state !== 'withdrawn' && old?.source_fingerprint === issueFingerprint(issue)) {
+				feedback.set(issue.number, { issue })
+			}
+		}
+		for (const issue of nodes) {
+			const old = state.records.find((record) => record.descriptor.id === `github-${issue.id}`)
+			if (trusted(issue.user?.login) && !issue.pull_request
+				&& (old || issue.labels?.some((label) => (typeof label === 'string' ? label : label.name) === 'announcement'))) {
+				feedback.set(issue.number, { issue })
+			}
+		}
 		const audits = await auditsFor(nodes, token)
 		for (const issue of nodes) {
+			const audit = audits.get(issue.id) ?? { body: false, title: false, state: false }
+			const old = state.records.find((record) => record.descriptor.id === `github-${issue.id}`)
+			const eligible = trusted(issue.user?.login) && !issue.pull_request
+				&& (old || issue.labels?.some((label) => (typeof label === 'string' ? label : label.name) === 'announcement'))
+			if (eligible) feedback.set(issue.number, { issue })
 			try {
-				const change = applyIssue(state, issue, audits.get(issue.id) ?? { body: false, title: false, state: false }, now)
+				const change = applyIssue(state, issue, audit, now, (warning) => {
+					console.warn(`Issue ${issue.number}: ${warning}`)
+					if (eligible) feedback.set(issue.number, { issue, warning })
+				})
 				if (change) changes.set(change.path, change)
-			} catch (error) { errors.push(`Issue ${issue.number}: ${error.message}`) }
+				if (eligible && (!audit.body || !audit.title || !audit.state) && !(old && issue.state === 'closed' && audit.state)) {
+					feedback.set(issue.number, { issue, error: '无法确认本次正文、标题或状态操作来自可信发布者，未接受该修订。' })
+				}
+			} catch (error) {
+				errors.push(`Issue ${issue.number}: ${error.message}`)
+				if (eligible) feedback.set(issue.number, { issue, error: error.message })
+			}
 		}
 		const present = new Set(issues.map((issue) => `github-${issue.id}`))
 		for (const record of state.records) {
@@ -272,15 +332,22 @@ async function main() {
 			git(['commit', '-m', 'docs: publish announcement snapshot'], root, askpass, 'x-access-token', token)
 			git(['push', 'origin', 'HEAD:refs/heads/published'], root, askpass, 'x-access-token', token)
 		}
+		githubPublished = true
 		console.log(`GitHub published 已发布 generation ${index.generation}，${index.announcements.length} 条公告/历史记录。`)
 		if (syncGitcode) {
 			git(['remote', 'add', 'gitcode', GITCODE], root, askpass, gitcodeUser, gitcodeToken)
 			git(['push', 'gitcode', 'HEAD:refs/heads/main'], root, askpass, gitcodeUser, gitcodeToken)
+			gitcodeSynced = true
 			console.log('GitCode main 同步完成，启动器优先读取 GitCode，失败时回退到 GitHub published。')
 		} else {
 			console.log('本次运行已跳过 GitCode，不连接分发服务器。恢复后勾选同步并重跑即可补同步。')
 		}
+		const commentFailed = await reportFeedback()
 		if (errors.length) throw new Error(`其他合法变更已发布，以下修订未发布，旧版本保留：\n${errors.join('\n')}`)
+		if (commentFailed) throw new Error('公告已发布，但部分 Issue 反馈评论失败，请检查 issues:write 权限并重跑。')
+	} catch (error) {
+		if (!feedbackSent) await reportFeedback()
+		throw error
 	} finally { await rm(temporary, { recursive: true, force: true }) }
 }
 

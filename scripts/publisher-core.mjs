@@ -7,6 +7,7 @@ export const MAX_INDEX_BYTES = 1024 * 1024
 export const MAX_RECORDS = 2000
 export const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
 export const trusted = (login) => typeof login === 'string' && login.toLowerCase() === AUTHOR.toLowerCase()
+export const issueFingerprint = (issue) => sha256(JSON.stringify([issue.id, issue.title, issue.body, issue.state]))
 
 export function timestamp(value) {
 	if (typeof value !== 'string') throw new Error('时间必须是带时区的 RFC3339 字符串')
@@ -54,7 +55,9 @@ export function validateState(raw) {
 		const descriptor = validateDescriptor(record.descriptor)
 		if (seen.has(descriptor.id)) throw new Error('发布状态中有重复 ID')
 		seen.add(descriptor.id)
-		return { descriptor, source_updated_at: timestamp(record.source_updated_at) }
+		if (record.source_fingerprint !== undefined && !/^[a-f0-9]{64}$/.test(record.source_fingerprint)) throw new Error('修订指纹无效')
+		return { descriptor, source_updated_at: timestamp(record.source_updated_at),
+			...(record.source_fingerprint ? { source_fingerprint: record.source_fingerprint } : {}) }
 	})
 	return { schema_version: 1, records }
 }
@@ -122,14 +125,20 @@ function applyControl(previous, issue, audit, revision) {
 }
 
 /** Updates use the latest audited source, so collapsed Actions events do not lose changes. */
-export function applyIssue(state, issue, audit, now) {
+export function applyIssue(state, issue, audit, now, onWarning = () => {}) {
 	const id = issueId(issue)
 	const previous = state.records.find((record) => record.descriptor.id === id)
 	if (!trusted(issue.user?.login) || issue.pull_request || previous?.descriptor.state === 'withdrawn') return null
 	if (!previous && !(issue.labels ?? []).some((label) => (typeof label === 'string' ? label : label.name) === 'announcement')) return null
 	const revision = timestamp(issue.updated_at)
 	if (previous && Date.parse(revision) < Date.parse(previous.source_updated_at)) return null
-	if (!audit.body || !audit.title) {
+	if (previous && issue.state === 'closed' && audit.state) {
+		applyControl(previous, issue, audit, revision)
+		previous.source_updated_at = revision
+		previous.source_fingerprint = issueFingerprint(issue)
+		return null
+	}
+	if (!audit.body || !audit.title || !audit.state) {
 		applyControl(previous, issue, audit, revision)
 		return null
 	}
@@ -138,23 +147,40 @@ export function applyIssue(state, issue, audit, now) {
 	try { form = parseForm(issue.body, published) }
 	catch (error) {
 		applyControl(previous, issue, audit, revision)
+		if (issue.state === 'closed' && audit.state) {
+			onWarning(`已关闭且未成功发布的公告已跳过：${error.message}`)
+			return null
+		}
 		throw error
 	}
 	const title = typeof issue.title === 'string' ? issue.title.trim() : ''
 	const hash = sha256(Buffer.from(form.markdown))
 	const status = audit.state ? (issue.state === 'closed' ? 'ended' : 'published') : previous?.descriptor.state
 	if (!status) return null
-	const descriptor = validateDescriptor({ id, issue_number: issue.number, title, level: form.level,
-		published_at: published, updated_at: revision, starts_at: form.starts_at, expires_at: form.expires_at,
-		state: status, body_path: `announcements/${id}/${hash}.md`, body_sha256: hash })
+	let descriptor
+	try {
+		descriptor = validateDescriptor({ id, issue_number: issue.number, title, level: form.level,
+			published_at: published, updated_at: revision, starts_at: form.starts_at, expires_at: form.expires_at,
+			state: status, body_path: `announcements/${id}/${hash}.md`, body_sha256: hash })
+	} catch (error) {
+		if (issue.state === 'closed' && audit.state) {
+			onWarning(`已关闭且未成功发布的公告已跳过：${error.message}`)
+			return null
+		}
+		throw error
+	}
 	if (previous) {
 		const comparable = (item) => JSON.stringify({ ...item, updated_at: '' })
-		if (comparable(previous.descriptor) === comparable(descriptor)) return null
+		if (comparable(previous.descriptor) === comparable(descriptor)) {
+			previous.source_fingerprint = issueFingerprint(issue)
+			return null
+		}
 		previous.descriptor = descriptor
 		previous.source_updated_at = revision
+		previous.source_fingerprint = issueFingerprint(issue)
 	} else {
 		if (state.records.length >= MAX_RECORDS) throw new Error('公告超过 2000 条，需要升级归档协议，不能截断历史')
-		state.records.push({ descriptor, source_updated_at: revision })
+		state.records.push({ descriptor, source_updated_at: revision, source_fingerprint: issueFingerprint(issue) })
 	}
 	return { path: descriptor.body_path, markdown: form.markdown }
 }
@@ -165,6 +191,7 @@ export function withdraw(state, id, now) {
 	const at = timestamp(now)
 	record.descriptor = { id, published_at: record.descriptor.published_at, updated_at: at, state: 'withdrawn' }
 	record.source_updated_at = at
+	delete record.source_fingerprint
 	return true
 }
 

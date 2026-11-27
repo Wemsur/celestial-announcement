@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { feedbackBody, postFeedback } from '../scripts/issue-feedback.mjs'
 import { parseSyncFlag } from '../scripts/publish-announcements.mjs'
 import {
 	applyIssue, auditIssue, buildIndex, parseForm, timestamp, validateDescriptor, validateState, withdraw,
@@ -68,6 +69,71 @@ test('关闭、重开保留正文路径，撤回不保留内容且不可复活',
 	assert.deepEqual(Object.keys(state.records[0].descriptor).sort(), ['id', 'published_at', 'state', 'updated_at'])
 	assert.ok(!JSON.stringify(state).includes('离线测试'))
 	assert.equal(applyIssue(state, issue({ updated_at: '2026-01-01T04:00:00Z' }), allowed, at), null)
+})
+
+test('已关闭的坏公告不阻止新公告，已发布正文保持原样', () => {
+	const state = empty()
+	const warnings = []
+	const closed = issue({ state: 'closed', body: form().replace('2026-01-02T00:00:00Z', '2025-01-01T00:00:00Z') })
+	assert.equal(applyIssue(state, closed, allowed, at, (warning) => warnings.push(warning)), null)
+	assert.equal(state.records.length, 0)
+	assert.equal(warnings.length, 1)
+	applyIssue(state, issue(), allowed, at)
+	const original = { ...state.records[0].descriptor }
+	const revision = '2026-01-01T01:00:00Z'
+	applyIssue(state, { ...closed, updated_at: revision }, allowed, at)
+	assert.equal(state.records[0].descriptor.state, 'ended')
+	assert.equal(state.records[0].descriptor.body_sha256, original.body_sha256)
+	assert.equal(state.records[0].source_updated_at, revision)
+	assert.ok(validateState(state).records[0].source_fingerprint)
+	applyIssue(state, { ...closed, updated_at: '2026-01-01T02:00:00Z' }, allowed, at)
+	assert.equal(state.records[0].source_updated_at, '2026-01-01T02:00:00Z')
+	assert.throws(() => applyIssue(empty(), { ...closed, state: 'open' }, allowed, at))
+})
+
+test('反馈标记不受评论更新 Issue 时间影响，结果变化产生新标记', () => {
+	const result = { ok: true, title: '公告发布成功', message: '已同步' }
+	const marker = (body) => body.split('\n')[0]
+	const first = feedbackBody(issue(), result, null)
+	assert.equal(marker(first), marker(feedbackBody(issue({ updated_at: '2026-01-02T00:00:00Z' }), result, null)))
+	assert.notEqual(marker(first), marker(feedbackBody(issue(), { ...result, ok: false }, null)))
+})
+
+test('只将真实机器人同修订同结果评论视为去重记录', async () => {
+	const result = { ok: true, title: '公告发布成功', message: '已同步' }
+	const body = feedbackBody(issue(), result, null)
+	let posts = 0
+	const api = async (_url, _token, payload) => {
+		if (payload) { posts++; return { status: 201 } }
+		return { status: 200, data: [{ user: { login: 'github-actions[bot]', type: 'Bot' }, body }] }
+	}
+	await postFeedback(api, 'https://api.github.com/repos/example/repo', 'fake', issue(), result, null)
+	assert.equal(posts, 0)
+	await postFeedback(api, 'https://api.github.com/repos/example/repo', 'fake', issue(), { ...result, ok: false }, null)
+	assert.equal(posts, 1)
+})
+
+test('失败之后恢复成功时不被更早的成功评论吞掉', async () => {
+	const success = { ok: true, title: '公告发布成功', message: '已同步' }
+	const failure = { ok: false, title: '同步未完成', message: '请重试' }
+	const comments = [success, failure].map((result) => ({
+		user: { login: 'github-actions[bot]', type: 'Bot' }, body: feedbackBody(issue(), result, null),
+	}))
+	let posts = 0
+	const api = async (_url, _token, payload) => {
+		if (payload) { posts++; return { status: 201 } }
+		return { status: 200, data: comments }
+	}
+	await postFeedback(api, 'https://api.github.com/repos/example/repo', 'fake', issue(), success, null)
+	assert.equal(posts, 1)
+})
+
+test('未可信的关闭操作不归档且不接受正文修订', () => {
+	const state = empty()
+	applyIssue(state, issue(), allowed, at)
+	const original = JSON.stringify(state)
+	applyIssue(state, issue({ state: 'closed', body: form('不应接纳'), updated_at: '2026-01-01T01:00:00Z' }), { ...allowed, state: false }, at)
+	assert.equal(JSON.stringify(state), original)
 })
 
 test('路径和重复标识不能覆盖文件', () => {
