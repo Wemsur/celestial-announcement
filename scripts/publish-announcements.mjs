@@ -117,14 +117,14 @@ async function writeSnapshot(root, state, previous, changes, now) {
 	return index
 }
 
-async function api(url, token, body) {
+export async function api(url, token, body, { allowGone = false } = {}) {
 	const response = await fetch(url, {
 		method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(15_000),
 		headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'Celestial-Announcement-Publisher',
 			'X-GitHub-Api-Version': '2022-11-28', 'Content-Type': 'application/json' },
 		body: body ? JSON.stringify(body) : undefined,
 	})
-	if (response.status === 404) return { status: 404, data: null }
+	if (response.status === 404 || (allowGone && response.status === 410)) return { status: response.status, data: null }
 	if (!response.ok) throw new Error(`GitHub API HTTP ${response.status}`)
 	let size = 0
 	const chunks = []
@@ -321,8 +321,8 @@ async function main() {
 		const present = new Set(issues.map((issue) => `github-${issue.id}`))
 		for (const record of state.records) {
 			if (record.descriptor.state === 'withdrawn' || present.has(record.descriptor.id)) continue
-			const check = await api(`${API}/issues/${record.descriptor.issue_number}`, token)
-			if (check.status === 404) withdraw(state, record.descriptor.id, now)
+			const check = await api(`${API}/issues/${record.descriptor.issue_number}`, token, undefined, { allowGone: true })
+			if (check.status === 404 || check.status === 410) withdraw(state, record.descriptor.id, now)
 		}
 		const index = await writeSnapshot(root, state, previous, changes, now)
 		git(['config', 'user.name', 'github-actions[bot]'], root, askpass, 'x-access-token', token)

@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { feedbackBody, postFeedback } from '../scripts/issue-feedback.mjs'
-import { parseSyncFlag } from '../scripts/publish-announcements.mjs'
+import { api, parseSyncFlag } from '../scripts/publish-announcements.mjs'
 import {
 	applyIssue, auditIssue, buildIndex, parseForm, timestamp, validateDescriptor, validateState, withdraw,
 } from '../scripts/publisher-core.mjs'
@@ -18,6 +18,28 @@ test('取消 GitCode 同步不被当成缺省值，缺省仍同步', () => {
 	assert.equal(parseSyncFlag('true'), true)
 	assert.equal(parseSyncFlag('false'), false)
 	assert.throws(() => parseSyncFlag(''), /SYNC_GITCODE 必须为 true 或 false/)
+})
+
+test('缺失 Issue 补查接受 404 和 410，其他接口和服务错误仍报错', async (t) => {
+	let status = 410
+	t.mock.method(globalThis, 'fetch', async () => new Response(null, { status }))
+	const url = 'https://api.github.com/repos/Wemsur/celestial-announcement/issues/1'
+	const state = empty()
+	applyIssue(state, issue(), allowed, at)
+	const previous = buildIndex(state, null, at)
+	await assert.rejects(api(url, 'test-token'), /HTTP 410/)
+	const gone = await api(url, 'test-token', undefined, { allowGone: true })
+	assert.deepEqual(gone, { status: 410, data: null })
+	if (gone.status === 404 || gone.status === 410) withdraw(state, 'github-123', '2026-01-01T01:00:00Z')
+	const next = buildIndex(state, previous, '2026-01-01T01:00:00Z')
+	assert.equal(next.generation, previous.generation + 1)
+	assert.equal(next.announcements[0].state, 'withdrawn')
+	assert.ok(!JSON.stringify(next).includes('历史测试正文'))
+	status = 404
+	assert.deepEqual(await api(url, 'test-token', undefined, { allowGone: true }), { status: 404, data: null })
+	for (status of [403, 429, 500]) {
+		await assert.rejects(api(url, 'test-token', undefined, { allowGone: true }), new RegExp(`HTTP ${status}`))
+	}
 })
 
 test('严格日期与明确时区', () => {
