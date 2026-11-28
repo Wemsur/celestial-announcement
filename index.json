@@ -1,8 +1,21 @@
 {
 	"schema_version": 1,
-	"generation": 10,
-	"generated_at": "2026-11-28T05:38:57.234Z",
+	"generation": 11,
+	"generated_at": "2026-11-28T05:39:42.934Z",
 	"announcements": [
+		{
+			"id": "github-6659862501",
+			"issue_number": 7,
+			"title": "公告样式测试3",
+			"level": "critical",
+			"published_at": "2026-11-28T05:39:42.934Z",
+			"updated_at": "2026-11-28T05:39:34.000Z",
+			"starts_at": "2026-11-28T05:39:42.934Z",
+			"expires_at": "2026-11-28T22:00:00.000Z",
+			"state": "published",
+			"body_path": "announcements/github-6659862501/5807dad11d98c2c0c2e119a14bbff4f2cbf028cd7382b89503797b86fd112eee.md",
+			"body_sha256": "5807dad11d98c2c0c2e119a14bbff4f2cbf028cd7382b89503797b86fd112eee"
+		},
 		{
 			"id": "github-6659856158",
 			"issue_number": 6,
