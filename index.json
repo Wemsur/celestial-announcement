@@ -1,7 +1,7 @@
 {
 	"schema_version": 1,
-	"generation": 6,
-	"generated_at": "2026-11-28T03:21:20.987Z",
+	"generation": 7,
+	"generated_at": "2026-11-28T03:21:33.889Z",
 	"announcements": [
 		{
 			"id": "github-6648401580",
@@ -24,16 +24,9 @@
 		},
 		{
 			"id": "github-6522587779",
-			"issue_number": 1,
-			"title": "测试用公告11.21",
-			"level": "info",
 			"published_at": "2026-11-21T01:08:56.252Z",
-			"updated_at": "2026-11-21T01:08:43.000Z",
-			"starts_at": "2026-11-21T01:08:56.252Z",
-			"expires_at": "2026-11-21T16:00:00.000Z",
-			"state": "published",
-			"body_path": "announcements/github-6522587779/1ea64e4a16928fb82eae9b094031652a45130df0e2a580faf6507a96c5aa6b41.md",
-			"body_sha256": "1ea64e4a16928fb82eae9b094031652a45130df0e2a580faf6507a96c5aa6b41"
+			"updated_at": "2026-11-28T03:21:33.889Z",
+			"state": "withdrawn"
 		}
 	]
 }
