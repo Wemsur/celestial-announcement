@@ -1,8 +1,21 @@
 {
 	"schema_version": 1,
-	"generation": 8,
-	"generated_at": "2026-11-28T03:21:47.582Z",
+	"generation": 9,
+	"generated_at": "2026-11-28T05:38:00.861Z",
 	"announcements": [
+		{
+			"id": "github-6659848376",
+			"issue_number": 5,
+			"title": "公告样式测试1",
+			"level": "info",
+			"published_at": "2026-11-28T05:38:00.861Z",
+			"updated_at": "2026-11-28T05:37:52.000Z",
+			"starts_at": "2026-11-28T05:38:00.861Z",
+			"expires_at": "2026-11-28T22:00:00.000Z",
+			"state": "published",
+			"body_path": "announcements/github-6659848376/762a5220b86985e4f998ccd3a69c4252ee0b97c7b168c82bcf12a8c2a1e24bba.md",
+			"body_sha256": "762a5220b86985e4f998ccd3a69c4252ee0b97c7b168c82bcf12a8c2a1e24bba"
+		},
 		{
 			"id": "github-6648401580",
 			"published_at": "2026-11-27T14:29:20.698Z",
